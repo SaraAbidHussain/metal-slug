@@ -12,20 +12,13 @@ void Jump();
 void applyGravity(float dt);
 void DrawScrollingBackground(Texture2D bg, float scrollX);
 void UpdateAndDrawPlayer();
-void FiredBullet(bool movingUp);
-void DrawBullets();
-void LoadBulletTexture();
 
-const int maxBullets = 10;
-struct bullet
-{
-    float x = 0, y = 0, rad = 5.0f;
-    bool isFired = false;
-    bool ismovingUP = false;
-    void (*bulletAction)(bullet&) = nullptr;
 
+
+struct bullet{
+    float x, y, rad;
+    bool isFired;
 }; 
-bullet Bullet[maxBullets];
 
 
 struct Player {
@@ -66,13 +59,6 @@ Player P = {
 
 float scrollX = 0.0f;  
 Texture2D bg;          
-
-Texture2D bulletTexture;
-const int bulletFrames = 7; // Number of frames
-int bulletFrameWidth;
-int currentFrame = 0;
-int frameCounter = 0;
-const int frameSpeed = 2; // Adjust speed of animation
 
 
 
@@ -202,26 +188,6 @@ void DrawScrollingBackground(Texture2D bg, float scrollX) {
     DrawTextureEx(bg, {scrollX + bgWidth, 0}, 0.0f, 1.0f, WHITE);
 }
 
-
-void DrawBullets() {
-    frameCounter++;
-    if (frameCounter >= frameSpeed) {
-        frameCounter = 0;
-        currentFrame = (currentFrame + 1) % bulletFrames;
-    }
-
-    for (int i = 0; i < maxBullets; i++) {
-        if (Bullet[i].isFired) {
-            Rectangle sourceRec = {static_cast<float>(currentFrame * bulletFrameWidth), 0, (float)bulletFrameWidth, (float)bulletTexture.height};
-            Rectangle destRec = {Bullet[i].x, Bullet[i].y, Bullet[i].rad * 5, Bullet[i].rad * 5};
-            Vector2 origin = {Bullet[i].rad, Bullet[i].rad};
-
-            float rotation = Bullet[i].ismovingUP ? -90.0f : 0.0f; // Rotating if moving up
-            DrawTexturePro(bulletTexture, sourceRec, destRec, origin, rotation, WHITE);
-        }
-    }
-}
-
 void UpdateAndDrawPlayer() {
     
     P.hitbox.x = P.player.x;
@@ -236,48 +202,4 @@ void UpdateAndDrawPlayer() {
         {P.player.x, P.player.y, P.player.width, P.player.height}, 
         {0, 0}, 0, WHITE
     );
-}
-
-
-void MoveBullets(struct bullet& b)
-{
-    if (b.ismovingUP)
-    {
-        b.y -= 300.0f * GetFrameTime();
-        if (b.y < 0)
-        {
-            b.isFired = false;
-        }
-    }
-    else
-    {
-        b.x += 300.0f * GetFrameTime();
-        if (b.x > screenWidth)
-        {
-            b.isFired = false;
-        }
-    }
-}
-
-void FiredBullet(bool movingUp)
-{
-    for (int i = 0; i < maxBullets; i++)
-    {
-        if (!Bullet[i].isFired)
-        {
-            Bullet[i].x = P.player.x + (P.isFacingRight ? P.player.width : 0);
-            Bullet[i].y = P.player.y + P.player.height / 2 - 5;
-            Bullet[i].rad = 5.0f;
-            Bullet[i].isFired = true;
-            Bullet[i].ismovingUP = movingUp;
-            Bullet[i].bulletAction = MoveBullets; //function pointer
-            break;  
-        }
-    }
-}
-
-
-void LoadBulletTexture() {
-    bulletTexture = LoadTexture("bullets.png");
-    bulletFrameWidth = bulletTexture.width / bulletFrames;
 }
