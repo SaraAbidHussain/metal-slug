@@ -13,7 +13,7 @@ void Jump();
 void applyGravity(float dt);
 
 
-// this is a testing line
+// this is a test 
 //Player struct
 struct Player
 {
