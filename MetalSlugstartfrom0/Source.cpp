@@ -3,23 +3,29 @@
 using namespace std;
 
 // Function pointer for movement
-typedef void (*playerAction)();
-playerAction currentAction = nullptr;
+void (*playerAction)(void) = nullptr;
 
-
+//void (* Shoot) (txture2D ....)
 void moveLeft();
 void moveRight();
 void Jump();
 void applyGravity(float dt);
 void DrawScrollingBackground(Texture2D bg, float scrollX);
 void UpdateAndDrawPlayer();
+void FiredBullet(bool movingUp);
+void DrawBullets();
+void LoadBulletTexture();
 
+const int maxBullets = 10;
+struct bullet
+{
+    float x = 0, y = 0, rad = 5.0f;
+    bool isFired = false;
+    bool ismovingUP = false;
+    void (*bulletAction)(bullet&) = nullptr;
 
-
-struct bullet{
-    float x, y, rad;
-    bool isFired;
 }; 
+bullet Bullet[maxBullets];
 
 
 struct Player {
@@ -61,10 +67,18 @@ Player P = {
 float scrollX = 0.0f;  
 Texture2D bg;          
 
+Texture2D bulletTexture;
+const int bulletFrames = 7; // Number of frames
+int bulletFrameWidth;
+int currentFrame = 0;
+int frameCounter = 0;
+const int frameSpeed = 2; // Adjust speed of animation
+
 
 
 int main() {
     InitWindow(screenWidth, screenHeight, "Metal Slug!");
+    LoadBulletTexture();
     SetTargetFPS(90);
 
     
@@ -73,37 +87,52 @@ int main() {
     P.rightTexture = LoadTexture("main_char.png");
 
     while (!WindowShouldClose()) {
+
+        
         float dt = GetFrameTime();
 
-        if (IsKeyDown(KEY_LEFT) && P.player.x > 0) { // can not go back
-            currentAction = moveLeft;
+        if (IsKeyDown(KEY_LEFT) && P.player.x > 0) 
+        { // can not go back
+            playerAction = moveLeft;
             P.isFacingRight = false;
         } 
-        else if (IsKeyDown(KEY_RIGHT)) {
-            currentAction = moveRight;
+        if (IsKeyDown(KEY_RIGHT)) {
+            playerAction = moveRight;
             P.isFacingRight = true;
         } 
-        else if (IsKeyPressed(KEY_SPACE)) {
-            currentAction = Jump;
+        if (IsKeyPressed(KEY_SPACE)) {
+            playerAction = Jump;
         } 
-        else {
-            currentAction = nullptr;
+        if (!(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) || IsKeyPressed(KEY_SPACE)))
+        {
+            playerAction = nullptr;
         }
-
-        if (currentAction) {
-            currentAction();
+        if (playerAction) {
+            playerAction();
         }
         applyGravity(dt);
 
+        if (IsKeyPressed(KEY_F))
+        {
+            FiredBullet(false); 
+        }
+        if (IsKeyPressed(KEY_R))
+        {
+            FiredBullet(true);
+        }
+        for (int i = 0; i < maxBullets; i++) {
+            if (Bullet[i].isFired && Bullet[i].bulletAction) {
+                Bullet[i].bulletAction(Bullet[i]); // Calling function pointer to move bullet
+            }
+        }
         // Camera effect
         if (P.player.x > screenWidth / 2) {
             scrollX -= P.speed * dt; // Move background
             P.player.x = screenWidth / 2; // Keep player fixed in center
         }
 
-        // Prevent white space at the end of the background
         if (scrollX <= -bg.width) {
-            scrollX = 0; // Loop background properly
+            scrollX = 0; // Looping background 
         }
 
 
@@ -111,9 +140,8 @@ int main() {
         ClearBackground(RAYWHITE);
 
         DrawScrollingBackground(bg, scrollX);
-
+        DrawBullets();
         UpdateAndDrawPlayer();
-
         EndDrawing();
     }
 
@@ -121,6 +149,7 @@ int main() {
     UnloadTexture(bg);
     UnloadTexture(P.leftTexture);
     UnloadTexture(P.rightTexture);
+    UnloadTexture(bulletTexture);
 
     CloseWindow();
     return 0;
@@ -134,7 +163,7 @@ void moveLeft() {
 
 void moveRight() {
     if (P.player.x < screenWidth) { // can't go beyond right boundary
-        if (P.player.x < screenWidth / 2) {
+        if (P.player.x < screenWidth / 3) {
             P.player.x += P.speed * GetFrameTime();
         } 
         else {
@@ -163,10 +192,6 @@ void applyGravity(float dt) {
     }
 }
 
-void Shoot() {
-    // Future feature
-}
-
 
 void DrawScrollingBackground(Texture2D bg, float scrollX) {
 
@@ -175,6 +200,26 @@ void DrawScrollingBackground(Texture2D bg, float scrollX) {
    
     DrawTextureEx(bg, {scrollX, 0}, 0.0f, 1.0f, WHITE);
     DrawTextureEx(bg, {scrollX + bgWidth, 0}, 0.0f, 1.0f, WHITE);
+}
+
+
+void DrawBullets() {
+    frameCounter++;
+    if (frameCounter >= frameSpeed) {
+        frameCounter = 0;
+        currentFrame = (currentFrame + 1) % bulletFrames;
+    }
+
+    for (int i = 0; i < maxBullets; i++) {
+        if (Bullet[i].isFired) {
+            Rectangle sourceRec = {static_cast<float>(currentFrame * bulletFrameWidth), 0, (float)bulletFrameWidth, (float)bulletTexture.height};
+            Rectangle destRec = {Bullet[i].x, Bullet[i].y, Bullet[i].rad * 5, Bullet[i].rad * 5};
+            Vector2 origin = {Bullet[i].rad, Bullet[i].rad};
+
+            float rotation = Bullet[i].ismovingUP ? -90.0f : 0.0f; // Rotating if moving up
+            DrawTexturePro(bulletTexture, sourceRec, destRec, origin, rotation, WHITE);
+        }
+    }
 }
 
 void UpdateAndDrawPlayer() {
@@ -191,4 +236,48 @@ void UpdateAndDrawPlayer() {
         {P.player.x, P.player.y, P.player.width, P.player.height}, 
         {0, 0}, 0, WHITE
     );
+}
+
+
+void MoveBullets(struct bullet& b)
+{
+    if (b.ismovingUP)
+    {
+        b.y -= 300.0f * GetFrameTime();
+        if (b.y < 0)
+        {
+            b.isFired = false;
+        }
+    }
+    else
+    {
+        b.x += 300.0f * GetFrameTime();
+        if (b.x > screenWidth)
+        {
+            b.isFired = false;
+        }
+    }
+}
+
+void FiredBullet(bool movingUp)
+{
+    for (int i = 0; i < maxBullets; i++)
+    {
+        if (!Bullet[i].isFired)
+        {
+            Bullet[i].x = P.player.x + (P.isFacingRight ? P.player.width : 0);
+            Bullet[i].y = P.player.y + P.player.height / 2 - 5;
+            Bullet[i].rad = 5.0f;
+            Bullet[i].isFired = true;
+            Bullet[i].ismovingUP = movingUp;
+            Bullet[i].bulletAction = MoveBullets; //function pointer
+            break;  
+        }
+    }
+}
+
+
+void LoadBulletTexture() {
+    bulletTexture = LoadTexture("bullets.png");
+    bulletFrameWidth = bulletTexture.width / bulletFrames;
 }
