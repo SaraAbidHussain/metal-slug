@@ -12,7 +12,7 @@ void Jump();
 void applyGravity(float dt);
 void DrawScrollingBackground(Texture2D bg, float scrollX);
 void UpdateAndDrawPlayer();
-void FiredBullet();
+void FiredBullet(bool movingUp);
 void DrawBullets();
 
 const int maxBullets = 10;
@@ -20,6 +20,7 @@ struct bullet
 {
     float x = 0, y = 0, rad = 5.0f;
     bool isFired = false;
+    bool ismovingUP = false;
     void (*bulletAction)(bullet&) = nullptr;
 
 }; 
@@ -90,7 +91,10 @@ int main() {
         if (IsKeyPressed(KEY_SPACE)) {
             playerAction = Jump;
         } 
-       
+        if (!(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) || IsKeyPressed(KEY_SPACE)))
+        {
+            playerAction = nullptr;
+        }
         if (playerAction) {
             playerAction();
         }
@@ -98,9 +102,12 @@ int main() {
 
         if (IsKeyPressed(KEY_F))
         {
-            FiredBullet(); 
+            FiredBullet(false); 
         }
-
+        if (IsKeyPressed(KEY_R))
+        {
+            FiredBullet(true);
+        }
         for (int i = 0; i < maxBullets; i++) {
             if (Bullet[i].isFired && Bullet[i].bulletAction) {
                 Bullet[i].bulletAction(Bullet[i]); // Calling function pointer to move bullet
@@ -210,14 +217,24 @@ void UpdateAndDrawPlayer() {
 }
 void MoveBullets(struct bullet& b)
 {
-    
-    b.x += 300.0f * GetFrameTime();
-    if (b.x > screenWidth)
+    if (b.ismovingUP)
     {
-        b.isFired = false;
+        b.y -= 300.0f * GetFrameTime();
+        if (b.y < 0)
+        {
+            b.isFired = false;
+        }
+    }
+    else
+    {
+        b.x += 300.0f * GetFrameTime();
+        if (b.x > screenWidth)
+        {
+            b.isFired = false;
+        }
     }
 }
-void FiredBullet()
+void FiredBullet(bool movingUp)
 {
     for (int i = 0; i < maxBullets; i++)
     {
@@ -227,8 +244,9 @@ void FiredBullet()
             Bullet[i].y = P.player.y + P.player.height / 2;
             Bullet[i].rad = 5.0f;
             Bullet[i].isFired = true;
+            Bullet[i].ismovingUP = movingUp;
             Bullet[i].bulletAction = MoveBullets; //function pointer
-            //break;  
+            break;  
         }
     }
 }
