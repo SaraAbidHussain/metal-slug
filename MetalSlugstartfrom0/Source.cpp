@@ -1,6 +1,10 @@
 #include <iostream>
 #include <raylib.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 using namespace std;
 
 // Function pointer for movement
@@ -18,11 +22,26 @@ void DrawBullets();
 void LoadBulletTexture();
 void InitPlatforms();
 void ShowLoadingScreen(Music& music);
+void updateEnemies(float dt);
+void InitEnemies();
+void DrawEnemies();
 
 const int maxBullets = 10;
+
+struct bullet
+{
+    float x = 0, y = 0, rad = 5.0f;
+    bool isFired = false;
+    bool ismovingUP = false;
+    bool isMovingLeft = false;
+    void (*bulletAction)(bullet&) = nullptr;
+
+}; 
+bullet Bullet[maxBullets];
+
 struct enemy
 {
-    Rectangle rectE;
+    Rectangle rect;
     bool isActive;
     float speed;
 
@@ -30,18 +49,7 @@ struct enemy
 const int maxEnemies = 5;
 enemy enemies[maxEnemies];
 float enemySpawnTimer = 0.0f;
-const float enemySpawnInterval = 2.0f;
-
-
-struct bullet
-{
-    float x = 0, y = 0, rad = 5.0f;
-    bool isFired = false;
-    bool ismovingUP = false;
-    void (*bulletAction)(bullet&) = nullptr;
-
-}; 
-bullet Bullet[maxBullets];
+float enemySpawnInterval = 0.0f;
 
 
 struct Player {
@@ -83,7 +91,7 @@ Player P = {
 float scrollX = 0.0f;  
 Texture2D bg;          
 
-Texture2D bulletTexture;
+Texture2D bulletTexture, bulletLeft;
 const int bulletFrames = 7; // Number of frames
 int bulletFrameWidth;
 int currentFrame = 0;
@@ -126,8 +134,7 @@ int main() {
 
         UpdateMusicStream(bgAudio);
         float dt = GetFrameTime();
-
-        UpdateEnemies(dt);
+        updateEnemies(dt);
 
         if (IsKeyDown(KEY_LEFT) && P.player.x > 0) 
         { // can not go back
@@ -153,7 +160,7 @@ int main() {
         if (IsKeyPressed(KEY_F))
         {
             PlaySound(bullets);
-            FiredBullet(false); 
+            FiredBullet(false);
         }
         if (IsKeyPressed(KEY_R))
         {
@@ -165,7 +172,6 @@ int main() {
                 Bullet[i].bulletAction(Bullet[i]); // Calling function pointer to move bullet
             }
         }
-        
         // Camera effect
         if (P.player.x > screenWidth / 2) {
             scrollX -= P.speed * dt; // Move background
@@ -187,6 +193,7 @@ int main() {
         DrawBullets(); 
         UpdateAndDrawPlayer();
         DrawEnemies();
+              
         EndDrawing();
     }
 
@@ -266,11 +273,12 @@ void DrawScrollingBackground(Texture2D bg, float scrollX) {
     DrawTextureEx(bg, {scrollX, 0}, 0.0f, 1.0f, WHITE);
     DrawTextureEx(bg, {scrollX + bgWidth, 0}, 0.0f, 1.0f, WHITE);
 }
+
 void InitEnemies()
 {
     for(int i = 0; i < maxEnemies; i++)
         {
-            enemies[i].rectE = {screenWidth, screenHeight - 100, 50, 50};
+            enemies[i].rect = {screenWidth, groundY + 20, 50, 50}; // Adjust y position here
             enemies[i].isActive = false;
             enemies[i].speed = 100.0f;
         }
@@ -284,11 +292,12 @@ void updateEnemies(float dt)
             if (!enemies[i].isActive) {
                 enemies[i].isActive = true;
                 enemies[i].rect.x = screenWidth; 
-                enemies[i].rect.y = groundY;
+                enemies[i].rect.y = groundY + 20; // Adjust y position here
                 break;
             }
         }
-        enemySpawnTimer = 0.0f; // Reset timer
+        enemySpawnInterval = GetRandomValue(1, 5); // Set a new random interval between 1 and 5 seconds
+        enemySpawnTimer = 0.0f;
     }
 
     for (int i = 0; i < maxEnemies; i++) {
@@ -305,10 +314,11 @@ void updateEnemies(float dt)
 void DrawEnemies() {
     for (int i = 0; i < maxEnemies; i++) {
         if (enemies[i].isActive) {
-            //add enemy png
+            DrawRectangleRec(enemies[i].rect, RED); 
         }
     }
 }
+
 void DrawBullets() {
     frameCounter++;
     if (frameCounter >= frameSpeed) {
@@ -318,12 +328,15 @@ void DrawBullets() {
 
     for (int i = 0; i < maxBullets; i++) {
         if (Bullet[i].isFired) {
-            Rectangle sourceRec = {static_cast<float>(currentFrame * bulletFrameWidth), 0, (float)bulletFrameWidth, (float)bulletTexture.height};
+            Rectangle sourceRec = {(float)(currentFrame * bulletFrameWidth), 0, (float)bulletFrameWidth, (float)bulletTexture.height};
+            Texture2D currentTexture = Bullet[i].isMovingLeft ? bulletLeft : bulletTexture;
+
             Rectangle destRec = {Bullet[i].x, Bullet[i].y, Bullet[i].rad * 5, Bullet[i].rad * 5};
             Vector2 origin = {Bullet[i].rad, Bullet[i].rad};
 
-            float rotation = Bullet[i].ismovingUP ? -90.0f : 0.0f; // Rotating if moving up
-            DrawTexturePro(bulletTexture, sourceRec, destRec, origin, rotation, WHITE);
+            float rotation = Bullet[i].ismovingUP ? -90.0f : 0.0f; // Rotate if moving up
+
+            DrawTexturePro(currentTexture, sourceRec, destRec, origin, rotation, WHITE);
         }
     }
 }
@@ -353,6 +366,14 @@ void MoveBullets(struct bullet& b)
             b.isFired = false;
         }
     }
+    else if (b.isMovingLeft)
+    {
+        b.x -= 300.0f * GetFrameTime();
+        if (b.x < 0)
+        {
+            b.isFired = false;
+        }
+    }
     else
     {
         b.x += 300.0f * GetFrameTime();
@@ -362,6 +383,7 @@ void MoveBullets(struct bullet& b)
         }
     }
 }
+
 
 void FiredBullet(bool movingUp)
 {
@@ -374,6 +396,7 @@ void FiredBullet(bool movingUp)
             Bullet[i].rad = 5.0f;
             Bullet[i].isFired = true;
             Bullet[i].ismovingUP = movingUp;
+            Bullet[i].isMovingLeft = !P.isFacingRight; // Set isMovingLeft based on player's direction
             Bullet[i].bulletAction = MoveBullets; //function pointer
             break;  
         }
@@ -382,6 +405,7 @@ void FiredBullet(bool movingUp)
 
 void LoadBulletTexture() {
     bulletTexture = LoadTexture("bullets.png");
+    bulletLeft = LoadTexture("bulletsLeft.png");
     bulletFrameWidth = bulletTexture.width / bulletFrames;
 }
 
@@ -397,7 +421,11 @@ void InitPlatforms() {
 
 void WaitTime(float seconds) {
     int ms = seconds * 1000;  
-    usleep(ms * 1000);        
+#ifdef _WIN32
+    Sleep(ms);
+#else
+    usleep(ms * 1000);
+#endif          
 }
 
 void ShowLoadingScreen(Music& music) {
@@ -417,7 +445,6 @@ void ShowLoadingScreen(Music& music) {
     Texture2D loadingFrames[] = {load25, load50, load75, load100};
     for (int i = 0; i < 4; i++) {
         float startTime = GetTime();
-        // loop will run for 0.5 seconds for each frame
         while (GetTime() - startTime < 0.5f) {
             UpdateMusicStream(music);
             BeginDrawing();
@@ -431,13 +458,28 @@ void ShowLoadingScreen(Music& music) {
         UpdateMusicStream(music);
         BeginDrawing();
         ClearBackground(BLACK);
-        // even and odd for enter buttons
         if ((int)(GetTime() * 2) % 2 == 0) {
             DrawTexture(enter1, centerX - enter1.width / 2, centerY - enter1.height / 2, WHITE);
-        }
-         else {
+        } 
+        else {
             DrawTexture(enter2, centerX - enter2.width / 2, centerY - enter2.height / 2, WHITE);
         }
+        EndDrawing();
+    }
+
+    float alpha = 255.0f;  
+    float fadeSpeed = 150.0f;  
+    // black screen
+    while (alpha > 0 && !WindowShouldClose()) {
+        UpdateMusicStream(music);
+        
+        alpha -= fadeSpeed * GetFrameTime();  
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        
+        DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, alpha / 255.0f));  // currently not fading don't know why
+        
         EndDrawing();
     }
     
