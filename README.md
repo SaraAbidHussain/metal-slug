@@ -3,3 +3,4 @@
 2-7-2025 I have added bullet firing logics. (Sara Abid)
 2-8-2025 I have addded bullet animations, platforms and loading screens with music. (Ali Maqsood)
 2-8-2025 I have added ground enemies. (Sara Abid)
+2-9-2025 i have added loading screens, some effects and game is finished! (Ali Maqsood)
