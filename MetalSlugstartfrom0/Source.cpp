@@ -1,3 +1,5 @@
+// https://github.com/SaraAbidHussain/metal-slug
+
 #include <iostream>
 #include <raylib.h>
 #ifdef _WIN32
@@ -23,6 +25,7 @@ void LoadBulletTexture();
 void InitPlatforms();
 void ShowLoadingScreen(Music& music);
 void updateEnemies(float dt);
+void ShowControlScreen(Music& music);
 void InitEnemies();
 void DrawEnemies();
 void CheckBulletEnemyCollision();
@@ -34,6 +37,11 @@ void updateSkyEnemies(float dt);
 void DrawSkyEnemies();
 void DrawSkyEnemyBullets();
 void UpdateAfterCollisions();
+void countDown();
+void loopProceed();
+void DrawLevel(const char* fileName);
+void ShowWinScreen();
+void ResetLevel();
 
 const int maxBullets = 10;
 
@@ -129,7 +137,7 @@ const int bulletFrames = 7; // Number of frames
 int bulletFrameWidth;
 int currentFrame = 0;
 int frameCounter = 0;
-const int frameSpeed = 2; // Adjust speed of animation
+const int frameSpeed = 2; 
 
 
 // standing platforms
@@ -170,166 +178,228 @@ bool skyEnemyDying[maxSkyEnemies] = { false };
 float skyEnemyDyingTimer[maxSkyEnemies] = { 0.0f };
 const float skyEnemyDyingDuration = 0.1f;
 
+
+//copied enum type logic
+const int LEVEL_INTRO = 0;
+const int COUNTDOWN = 1;
+const int PLAYING = 2;
+const int PROCEED = 3;
+const int GAME_WIN = 4;
+const int GAME_OVER = 5;
+
+int currentState = LEVEL_INTRO;
+int currentLevel = 1;
+const int levelTargets[] = {10, 15, 25};
+bool levelCompleted = false;
+
+
 int main() {
-	InitWindow(screenWidth, screenHeight, "Metal Slug!");
-	InitAudioDevice();
-	LoadBulletTexture();
-	SetTargetFPS(90);
-	InitPlatforms();
-	InitEnemies();
+    InitWindow(screenWidth, screenHeight, "Metal Slug!");
+    InitAudioDevice();
+    LoadBulletTexture();
+    SetTargetFPS(90);
+    InitPlatforms();
+    InitEnemies();
 
-	bg = LoadTexture("perfectBG1.png");
-	P.leftTexture = LoadTexture("left face.png");
-	P.rightTexture = LoadTexture("main_char.png");
-	enemy1 = LoadTexture("enemy1.png");
-	enemy2 = LoadTexture("enemy2.png");
-	skyEnemy = LoadTexture("skyEnemy.png");
-	missile = LoadTexture("missile.png");
-	healthTexture = LoadTexture("health.png");
-	Music bgAudio = LoadMusicStream("bgAudio1.mp3");
-	Music bgAudio1 = LoadMusicStream("bgAudio.ogg");
-	dyingA = LoadSound("dyingMain.mp3");
-	heli = LoadSound("helicrash.mp3");
-	Sound bullets = LoadSound("bullets.mp3");
-	end1 = LoadTexture("end1.png");
-	end2 = LoadTexture("end2.png");
+    bg = LoadTexture("perfectBG1.png");
+    P.leftTexture = LoadTexture("left face.png");
+    P.rightTexture = LoadTexture("main_char.png");
+    enemy1 = LoadTexture("enemy1.png");
+    enemy2 = LoadTexture("enemy2.png");
+    skyEnemy = LoadTexture("skyEnemy.png");
+    missile = LoadTexture("missile.png");
+    healthTexture = LoadTexture("health.png");
+    Music bgAudio = LoadMusicStream("bgAudio1.mp3");
+    Music bgAudio1 = LoadMusicStream("bgAudio.ogg");
+    dyingA = LoadSound("dyingMain.mp3");
+    heli = LoadSound("helicrash.mp3");
+    Sound bullets = LoadSound("bullets.mp3");
+    end1 = LoadTexture("end1.png");
+    end2 = LoadTexture("end2.png");
 
+    PlayMusicStream(bgAudio);
 
-	PlayMusicStream(bgAudio);
+    ShowLoadingScreen(bgAudio1);
+    ShowControlScreen(bgAudio1);
 
-	ShowLoadingScreen(bgAudio1);
+    while (!WindowShouldClose()) {
+        UpdateMusicStream(bgAudio);
+        float dt = GetFrameTime();
 
-	while (!WindowShouldClose()) {
+        switch(currentState) {
+            case LEVEL_INTRO:
+                if (!levelCompleted) {
+                    DrawLevel(TextFormat("level%d.png", currentLevel));
+                    WaitTime(1);
+                    currentState = COUNTDOWN;
+                }
+                break;
 
-		UpdateMusicStream(bgAudio);
-		float dt = GetFrameTime();
-		updateEnemies(dt);
-		updateSkyEnemies(dt);
+            case COUNTDOWN:
+                countDown();
+                currentState = PLAYING;
+                break;
 
-		if (health > 0) {
-			if (IsKeyDown(KEY_LEFT) && P.player.x > 0)
-			{ // can not go back
-				playerAction = moveLeft;
-				P.isFacingRight = false;
-			}
-			if (IsKeyDown(KEY_RIGHT)) {
-				playerAction = moveRight;
-				P.isFacingRight = true;
-			}
-			if (IsKeyPressed(KEY_SPACE)) {
-				playerAction = Jump;
-			}
-			if (!(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) || IsKeyPressed(KEY_SPACE)))
-			{
-				playerAction = nullptr;
-			}
-			if (playerAction) {
-				playerAction();
-			}
-			applyGravity(dt);
+            case PLAYING:
+                updateEnemies(dt);
+                updateSkyEnemies(dt);
 
-			if (IsKeyPressed(KEY_F))
-			{
-				PlaySound(bullets);
-				FiredBullet(false);
-			}
-			if (IsKeyPressed(KEY_R))
-			{
-				PlaySound(bullets);
-				FiredBullet(true);
-			}
-			for (int i = 0; i < maxBullets; i++) {
-				if (Bullet[i].isFired && Bullet[i].bulletAction) {
-					Bullet[i].bulletAction(Bullet[i]); // Calling function pointer to move bullet
-				}
-			}
-			CheckBulletEnemyCollision();
-			CheckPlayerEnemyCollision();
-			UpdateAfterCollisions(); //sky enemy all collisions
+                if (health > 0) {
+                    if (IsKeyDown(KEY_LEFT) && P.player.x > 0) { // can not go back
+                        playerAction = moveLeft;
+                        P.isFacingRight = false;
+                    }
+                    if (IsKeyDown(KEY_RIGHT)) {
+                        playerAction = moveRight;
+                        P.isFacingRight = true;
+                    }
+                    if (IsKeyPressed(KEY_SPACE)) {
+                        playerAction = Jump;
+                    }
+                    if (!(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) || IsKeyPressed(KEY_SPACE))) {
+                        playerAction = nullptr;
+                    }
+                    if (playerAction) {
+                        playerAction();
+                    }
+                    applyGravity(dt);
 
-			// Camera effect
-			if (P.player.x > screenWidth / 2) {
-				scrollX -= P.speed * dt; // Move background
-				P.player.x = screenWidth / 2; // Keep player fixed in center
-			}
+                    if (IsKeyPressed(KEY_F)) {
+                        PlaySound(bullets);
+                        FiredBullet(false);
+                    }
+                    if (IsKeyPressed(KEY_E)) {
+                        PlaySound(bullets);
+                        FiredBullet(true);
+                    }
+                    for (int i = 0; i < maxBullets; i++) {
+                        if (Bullet[i].isFired && Bullet[i].bulletAction) {
+                            Bullet[i].bulletAction(Bullet[i]); // Calling function pointer to move bullet
+                        }
+                    }
+                    CheckBulletEnemyCollision();
+                    CheckPlayerEnemyCollision();
+                    UpdateAfterCollisions(); //sky enemy all collisions
 
-			if (scrollX <= -bg.width) {
-				scrollX = 0; // Looping background 
-			}
+                    // Camera effect
+                    if (P.player.x > screenWidth / 2) {
+                        scrollX -= P.speed * dt; // Move background
+                        P.player.x = screenWidth / 2; // Keep player fixed in center
+                    }
 
-			for (int i = 0; i < maxPlatforms; i++) {
-				platforms[i].rect.x = platforms[i].originalX + scrollX;
-			}
+                    if (scrollX <= -bg.width) {
+                        scrollX = 0; // Looping background 
+                    }
 
-			BeginDrawing();
-			ClearBackground(RAYWHITE);
+                    for (int i = 0; i < maxPlatforms; i++) {
+                        platforms[i].rect.x = platforms[i].originalX + scrollX;
+                    }
 
-			DrawScrollingBackground(bg, scrollX);
-			DrawBullets();
-			UpdateAndDrawPlayer();
-			DrawEnemies(); // Ensure this is called
-			DrawSkyEnemies();
-			DrawSkyEnemyBullets();
-			DrawHealth();
-			DrawScore();
-			EndDrawing();
-		}
-		else {
-			ShowGameOverScreen();
-		}
-	}
+                    BeginDrawing();
+                    ClearBackground(RAYWHITE);
 
-	// Unload textures
-	UnloadTexture(bg);
-	UnloadTexture(P.leftTexture);
-	UnloadTexture(P.rightTexture);
-	UnloadTexture(bulletTexture);
-	UnloadTexture(bulletTexture);
-	UnloadTexture(enemy1);
-	UnloadTexture(enemy2);
-	UnloadTexture(end1);
-	UnloadTexture(end2);
+                    DrawScrollingBackground(bg, scrollX);
+                    DrawBullets();
+                    UpdateAndDrawPlayer();
+                    DrawEnemies();
+                    DrawSkyEnemies();
+                    DrawSkyEnemyBullets();
+                    DrawHealth();
+                    DrawScore();
+                    EndDrawing();
+                    if (score >= levelTargets[currentLevel-1]) {
+                        levelCompleted = true;
+                        currentState = PROCEED;
+                    }
+                } 
+                else {
+                    currentState = GAME_OVER;
+                }
+                break;
 
-	CloseWindow();
-	return 0;
+            case PROCEED:
+                loopProceed(); 
+                if (IsKeyPressed(KEY_N)) {
+                    currentLevel++;
+                    if(currentLevel > 3) { 
+                        currentState = GAME_WIN;
+                    } 
+                    else {
+                        levelCompleted = false;
+                        ResetLevel();
+                        currentState = LEVEL_INTRO;
+                    }
+                }
+                break;
+
+            case GAME_WIN:
+                ShowWinScreen();
+                break;
+
+            case GAME_OVER:
+                ShowGameOverScreen();
+                break;
+        }
+    }
+    UnloadTexture(bg);
+    UnloadTexture(P.leftTexture);
+    UnloadTexture(P.rightTexture);
+    UnloadTexture(bulletTexture);
+    UnloadTexture(bulletLeft);
+    UnloadTexture(enemy1);
+    UnloadTexture(enemy2);
+    UnloadTexture(skyEnemy);
+    UnloadTexture(missile);
+    UnloadTexture(healthTexture);
+    UnloadTexture(end1);
+    UnloadTexture(end2);
+    UnloadSound(dyingA);
+    UnloadSound(heli);
+    UnloadSound(bullets);
+    UnloadMusicStream(bgAudio);
+    UnloadMusicStream(bgAudio1);
+    CloseWindow();
+    return 0;
 }
 
+
 void ShowGameOverScreen() {
-	static float frameTime = 0.0f;
-	static int currentFrame = 0;
-	Texture2D frames[] = { end1, end2 };
-	int numFrames = 2;
+    static float frameTime = 0.0f;
+    static int currentFrame = 0;
+    Texture2D frames[] = { end1, end2 };
+    int numFrames = 2;
 
-	frameTime += GetFrameTime();
-	if (frameTime >= 0.5f) {
-		frameTime = 0.0f;
-		currentFrame = (currentFrame + 1) % numFrames;
-	}
+    frameTime += GetFrameTime();
+    if (frameTime >= 0.5f) {
+        frameTime = 0.0f;
+        currentFrame = (currentFrame + 1) % numFrames;
+    }
 
-	BeginDrawing();
-	ClearBackground(BLACK);
-	DrawTexture(frames[currentFrame], 0, 0, WHITE);
-	int scorePosX = 456;
-	int scorePosY = 256;
-	DrawText(TextFormat("%d", score), scorePosX, scorePosY, 22, BLACK);
-	EndDrawing();
+    BeginDrawing();
+    ClearBackground(BLACK);
+    DrawTexture(frames[currentFrame], 0, 0, WHITE);
+    int scorePosX = 456;
+    int scorePosY = 256;
+    DrawText(TextFormat("%d", score), scorePosX, scorePosY, 22, BLACK);
+    EndDrawing();
 
-	if (IsKeyPressed(KEY_R)) {
-		health = 5;
-		score = 0;
-		P.player.x = startX;
-		P.player.y = startY;
-		scrollX = 0.0f;
-		for (int i = 0; i < maxEnemies; i++) {
-			enemies[i].isActive = false;
-		}
-		for (int i = 0; i < maxBullets; i++) {
-			Bullet[i].isFired = false;
-		}
-	}
-	else if (IsKeyPressed(KEY_Q)) {
-		CloseWindow();
-	}
+    if (IsKeyPressed(KEY_R)) {
+        health = 5;
+        score = 0;
+        P.player.x = startX;
+        P.player.y = startY;
+        scrollX = 0.0f;
+        for (int i = 0; i < maxEnemies; i++) {
+            enemies[i].isActive = false;
+        }
+        for (int i = 0; i < maxBullets; i++) {
+            Bullet[i].isFired = false;
+        }
+        currentState = LEVEL_INTRO;
+    }
+    else if (IsKeyPressed(KEY_Q)) {
+        CloseWindow();
+    }
 }
 
 
@@ -603,7 +673,7 @@ void DrawBullets() {
 
             float rotation = 0.0f;
             if (Bullet[i].ismovingUP) {
-                rotation = Bullet[i].isMovingLeft ? 90.0f : -90.0f; // Same rotation for both directions when moving up
+                rotation = Bullet[i].isMovingLeft ? 90.0f : -90.0f; 
             }
 
             DrawTexturePro(currentTexture, sourceRec, destRec, origin, rotation, WHITE);
@@ -707,14 +777,6 @@ void InitPlatforms() {
 	platforms[3] = { {1200, 493, 110, 10}, 1179, true };
 }
 
-void WaitTime(float seconds) {
-	int ms = seconds * 1000;
-#ifdef _WIN32
-	Sleep(ms);
-#else
-	usleep(ms * 1000);
-#endif 
-}
 
 void ShowLoadingScreen(Music& music) {
 	SetTargetFPS(60);
@@ -755,22 +817,6 @@ void ShowLoadingScreen(Music& music) {
 		EndDrawing();
 	}
 
-	float alpha = 255.0f; // Start fully opaque
-	float fadeSpeed = 150.0f; // Adjust speed for a smoother fade
-
-	while (alpha > 0 && !WindowShouldClose()) {
-		UpdateMusicStream(music);
-
-		alpha -= fadeSpeed * GetFrameTime(); // Decrease gradually
-
-		BeginDrawing();
-		ClearBackground(BLACK);
-
-		DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, alpha / 255.0f)); // Fading overlay, faida koi nhi
-
-		EndDrawing();
-	}
-
 	UnloadTexture(load25);
 	UnloadTexture(load50);
 	UnloadTexture(load75);
@@ -779,6 +825,22 @@ void ShowLoadingScreen(Music& music) {
 	UnloadTexture(enter2);
 }
 
+void ShowControlScreen(Music& music) {
+    Texture2D control = LoadTexture("control.png");
+
+    int centerX = screenWidth / 2;
+    int centerY = screenHeight / 2;
+
+    while (!(IsKeyPressed(KEY_LEFT_SHIFT) || IsKeyPressed(KEY_RIGHT_SHIFT)) && !WindowShouldClose()) {
+        UpdateMusicStream(music);
+        BeginDrawing();
+        ClearBackground(BLACK);
+        DrawTexture(control, centerX - control.width / 2, centerY - control.height / 2, WHITE);
+        EndDrawing();
+    }
+
+    UnloadTexture(control);
+}
 
 void CheckBulletEnemyCollision() {
     for (int i = 0; i < maxBullets; i++) {
@@ -865,5 +927,147 @@ void UpdateAfterCollisions() {
                 }
             }
         }
+    }
+}
+
+void countDown(){
+	Texture2D count3 = LoadTexture("count3.png");
+	Texture2D count2 = LoadTexture("count2.png");
+	Texture2D count1 = LoadTexture("count1.png");
+	Texture2D go = LoadTexture("countGO.png");
+
+	int centerX = screenWidth / 2;
+	int centerY = screenHeight / 2;
+
+	Texture2D countdownFrames[] = { count3, count2, count1, go };
+	float displayTime = 1.0f; 
+
+	for (int i = 0; i < 4; i++) {
+		float startTime = GetTime();
+		while (GetTime() - startTime < displayTime) {
+			BeginDrawing();
+			ClearBackground(BLACK);
+			DrawTexture(countdownFrames[i], centerX - countdownFrames[i].width / 2, centerY - countdownFrames[i].height / 2, WHITE);
+			EndDrawing();
+		}
+	}
+
+	UnloadTexture(count3);
+	UnloadTexture(count2);
+	UnloadTexture(count1);
+	UnloadTexture(go);
+}
+
+
+void loopProceed() {
+    Texture2D proceed1 = LoadTexture("proceed1.png");
+    Texture2D proceed2 = LoadTexture("proceed2.png");
+    Texture2D proceed3 = LoadTexture("proceed3.png");
+
+    int centerX = screenWidth / 2;
+    int centerY = screenHeight / 2;
+
+    Texture2D proceedFrames[] = { proceed1, proceed2, proceed3 };
+    int numFrames = 3;
+    int currentFrame = 0;
+    float frameTime = 0.0f;
+    float frameDuration = 0.5f;
+
+    while (true) {
+        if (IsKeyPressed(KEY_N)){
+            break;
+        }
+        if (IsKeyPressed(KEY_Q)) {
+            UnloadTexture(proceed1);
+            UnloadTexture(proceed2);
+            UnloadTexture(proceed3);
+            CloseWindow();
+            exit(0); 
+        }
+
+        frameTime += GetFrameTime();
+        if (frameTime >= frameDuration) {
+            frameTime = 0.0f;
+            currentFrame = (currentFrame + 1) % numFrames;
+        }
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        DrawTexture(proceedFrames[currentFrame], centerX - proceedFrames[currentFrame].width / 2, centerY - proceedFrames[currentFrame].height / 2, WHITE);
+        DrawText(TextFormat("%d", score), centerX + 40, centerY - 132, 40, WHITE);
+        EndDrawing();
+    }
+
+    UnloadTexture(proceed1);
+    UnloadTexture(proceed2);
+    UnloadTexture(proceed3);
+}
+
+void DrawLevel(const char* fileName) {
+	Texture2D levelTexture = LoadTexture(fileName);
+
+	BeginDrawing();
+	ClearBackground(RAYWHITE);
+	int centerX = (screenWidth - levelTexture.width) / 2;
+	int centerY = (screenHeight - levelTexture.height) / 2;
+	DrawTexture(levelTexture, centerX, centerY, WHITE);
+	EndDrawing();
+	ClearBackground(RAYWHITE);
+	DrawTexture(levelTexture, 0, 0, WHITE);
+	EndDrawing();
+
+	UnloadTexture(levelTexture);
+}
+
+void ShowWinScreen() {
+    Texture2D win1 = LoadTexture("win1.png");
+    Texture2D win2 = LoadTexture("win2.png");
+
+    int centerX = screenWidth / 2;
+    int centerY = screenHeight / 2;
+
+    Texture2D winFrames[] = { win1, win2 };
+    int numFrames = 2;
+    int currentFrame = 0;
+    float frameTime = 0.0f;
+    float frameDuration = 0.5f;
+
+    while (true) {
+        if (IsKeyPressed(KEY_ENTER)){
+            UnloadTexture(win1);
+            UnloadTexture(win2);
+            CloseWindow();
+            exit(0);
+        }
+
+        frameTime += GetFrameTime();
+        if (frameTime >= frameDuration) {
+            frameTime = 0.0f;
+            currentFrame = (currentFrame + 1) % numFrames;
+        }
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        DrawTexture(winFrames[currentFrame], centerX - winFrames[currentFrame].width / 2, centerY - winFrames[currentFrame].height / 2, WHITE);
+        EndDrawing();
+        WaitTime(0.5); 
+    }
+
+    UnloadTexture(win1);
+    UnloadTexture(win2);
+}
+
+void ResetLevel() {
+    
+    P.player.x = startX;
+    P.player.y = startY;
+    scrollX = 0.0f;
+    
+    for(int i = 0; i < maxEnemies; i++) {
+        enemies[i].isActive = false;
+    }
+    
+    for(int i = 0; i < maxBullets; i++) {
+        Bullet[i].isFired = false;
     }
 }
